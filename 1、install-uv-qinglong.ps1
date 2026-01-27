@@ -12,7 +12,7 @@ $Env:UV_LINK_MODE = "symlink"
 $Env:GIT_LFS_SKIP_SMUDGE = 1
 
 function InstallFail {
-    Write-Output "Install failed|安装失败。"
+    Write-Output "Install failed"
     Read-Host | Out-Null ;
     Exit
 }
@@ -29,17 +29,17 @@ function Check {
 
 try {
     uv --version
-    Write-Output "uv installed|UV模块已安装."
+    Write-Output "uv installed"
 }
 catch {
-    Write-Output "Installing uv|安装uv模块中..."
+    Write-Output "Installing uv"
     if ($Env:OS -ilike "*windows*") {
         powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
-        Check "uv install failed|安装uv模块失败。"
+        Check "uv install failed"
     }
     else {
         curl -LsSf https://astral.sh/uv/install.sh | sh
-        Check "uv install failed|安装uv模块失败。"
+        Check "uv install failed"
     }
 }
 
@@ -83,7 +83,7 @@ if ($env:OS -ilike "*windows*") {
     }
     else {
         Write-Output "Create .venv"
-        ~/.local/bin/uv venv -p 3.11 --seed
+        uv venv -p 3.11 --seed
         . ./.venv/Scripts/activate
     }
 }
