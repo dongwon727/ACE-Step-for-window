@@ -1,4 +1,4 @@
-# train script by @bdsqlsz
+# train script by @bdsqlsz, edit by DFveloper
 
 # Activate python venv
 Set-Location $PSScriptRoot
@@ -26,6 +26,6 @@ $Env:TORCH_HOME= "torch"
 #$Env:HF_ENDPOINT = "https://hf-mirror.com"
 $Env:XFORMERS_FORCE_DISABLE_TRITON = "1"
 
-python app.py
+python "./acestep/gui.py" --port 7865 --device_id 0 --share false --bf16 false --torch_compile true --cpu_offload true
 
 Read-Host | Out-Null ;

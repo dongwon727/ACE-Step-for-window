@@ -7,7 +7,7 @@ setup(
     long_description_content_type="text/markdown",
     version="0.2.0",
     packages=find_namespace_packages(),
-    install_requires=open("requirements.txt", encoding="utf-8").read().splitlines(),
+    install_requires=open("requirements-uv.txt", encoding="utf-8").read().splitlines(),
     author="ACE Studio, StepFun AI",
     license="Apache 2.0",
     classifiers=[
