@@ -49,9 +49,10 @@ class Pipeline(LightningModule):
         ssl_coeff: float = 1.0,
         checkpoint_dir=None,
         max_steps: int = 200000,
-        warmup_steps: int = 4000,
+        warmup_steps: int = 10,
         dataset_path: str = "./data/your_dataset_path",
         lora_config_path: str = None,
+        adapter_name: str = "lora_adapter",
     ):
         super().__init__()
 
@@ -62,26 +63,25 @@ class Pipeline(LightningModule):
         # Initialize scheduler
         self.scheduler = self.get_scheduler()
 
-        # Initialize local_rank for distributed training
-        self.local_rank = 0
-        if torch.distributed.is_initialized():
-            self.local_rank = torch.distributed.get_rank()
-
         # step 1: load model
         acestep_pipeline = ACEStepPipeline(checkpoint_dir)
-        acestep_pipeline.load_checkpoint(checkpoint_dir)
+        acestep_pipeline.load_checkpoint(acestep_pipeline.checkpoint_dir)
 
         transformers = acestep_pipeline.ace_step_transformer.float().cpu()
+        transformers.enable_gradient_checkpointing()
 
+        assert lora_config_path is not None, "Please provide a LoRA config path"
         if lora_config_path is not None:
             try:
                 from peft import LoraConfig
             except ImportError:
                 raise ImportError("Please install peft library to use LoRA training")
             with open(lora_config_path, encoding="utf-8") as f:
+                import json
                 lora_config = json.load(f)
             lora_config = LoraConfig(**lora_config)
-            transformers.add_adapter(adapter_config=lora_config)
+            transformers.add_adapter(adapter_config=lora_config, adapter_name=adapter_name)
+            self.adapter_name = adapter_name
 
         self.transformers = transformers
 
@@ -95,9 +95,33 @@ class Pipeline(LightningModule):
         if self.is_train:
             self.transformers.train()
 
-            self.mert_model = AutoModel.from_pretrained(
-                "m-a-p/MERT-v1-330M", trust_remote_code=True, cache_dir=checkpoint_dir
-            ).eval()
+            # download first
+            try:
+                self.mert_model = AutoModel.from_pretrained(
+                    "m-a-p/MERT-v1-330M", trust_remote_code=True, cache_dir=checkpoint_dir
+                ).eval()
+            except:
+                import json
+                import os
+
+                mert_config_path = os.path.join(
+                    os.path.expanduser("~"),
+                    ".cache",
+                    "huggingface",
+                    "hub",
+                    "models--m-a-p--MERT-v1-330M",
+                    "blobs",
+                    "14f770758c7fe5c5e8ead4fe0f8e5fa727eb6942"
+                )
+
+                with open(mert_config_path) as f:
+                    mert_config = json.load(f)
+                mert_config["conv_pos_batch_norm"] = False
+                with open(mert_config_path, mode="w") as f:
+                    json.dump(mert_config, f)
+                self.mert_model = AutoModel.from_pretrained(
+                    "m-a-p/MERT-v1-330M", trust_remote_code=True, cache_dir=checkpoint_dir
+                ).eval()
             self.mert_model.requires_grad_(False)
             self.resampler_mert = torchaudio.transforms.Resample(
                 orig_freq=48000, new_freq=24000
@@ -106,18 +130,13 @@ class Pipeline(LightningModule):
                 "m-a-p/MERT-v1-330M", trust_remote_code=True
             )
 
-            self.hubert_model = AutoModel.from_pretrained(
-                "utter-project/mHuBERT-147",
-                local_files_only=True,
-                cache_dir=checkpoint_dir,
-            ).eval()
+            self.hubert_model = AutoModel.from_pretrained("utter-project/mHuBERT-147").eval()
             self.hubert_model.requires_grad_(False)
             self.resampler_mhubert = torchaudio.transforms.Resample(
                 orig_freq=48000, new_freq=16000
             )
             self.processor_mhubert = Wav2Vec2FeatureExtractor.from_pretrained(
                 "utter-project/mHuBERT-147",
-                local_files_only=True,
                 cache_dir=checkpoint_dir,
             )
 
@@ -421,7 +440,7 @@ class Pipeline(LightningModule):
         lr_scheduler = torch.optim.lr_scheduler.LambdaLR(
             optimizer, lr_lambda, last_epoch=-1
         )
-        return [optimizer], lr_scheduler
+        return [optimizer], [{"scheduler": lr_scheduler, "interval": "step"}]
 
     def train_dataloader(self):
         self.train_dataset = Text2MusicDataset(
@@ -582,6 +601,17 @@ class Pipeline(LightningModule):
 
     def training_step(self, batch, batch_idx):
         return self.run_step(batch, batch_idx)
+
+    def on_save_checkpoint(self, checkpoint):
+        state = {}
+        log_dir = self.logger.log_dir
+        epoch = self.current_epoch
+        step = self.global_step
+        checkpoint_name = f"epoch={epoch}-step={step}_lora"
+        checkpoint_dir = os.path.join(log_dir, "checkpoints", checkpoint_name)
+        os.makedirs(checkpoint_dir, exist_ok=True)
+        self.transformers.save_lora_adapter(checkpoint_dir, adapter_name=self.adapter_name)
+        return state
 
     @torch.no_grad()
     def diffusion_process(
@@ -796,6 +826,8 @@ def main(args):
         every_plot_step=args.every_plot_step,
         dataset_path=args.dataset_path,
         checkpoint_dir=args.checkpoint_dir,
+        adapter_name=args.exp_name,
+        lora_config_path=args.lora_config_path
     )
     checkpoint_callback = ModelCheckpoint(
         monitor=None,
@@ -813,7 +845,7 @@ def main(args):
         num_nodes=args.num_nodes,
         precision=args.precision,
         accumulate_grad_batches=args.accumulate_grad_batches,
-        strategy="deepspeed_stage_2",
+        strategy="ddp_find_unused_parameters_true",
         max_epochs=args.epochs,
         max_steps=args.max_steps,
         log_every_n_steps=1,
@@ -840,9 +872,9 @@ if __name__ == "__main__":
     args.add_argument("--epochs", type=int, default=-1)
     args.add_argument("--max_steps", type=int, default=2000000)
     args.add_argument("--every_n_train_steps", type=int, default=2000)
-    args.add_argument("--dataset_path", type=str, default="./data/your_dataset_path")
-    args.add_argument("--exp_name", type=str, default="text2music_train_test")
-    args.add_argument("--precision", type=str, default="bf16-mixed")
+    args.add_argument("--dataset_path", type=str, default="./zh_lora_dataset")
+    args.add_argument("--exp_name", type=str, default="chinese_rap_lora")
+    args.add_argument("--precision", type=str, default="32")
     args.add_argument("--accumulate_grad_batches", type=int, default=1)
     args.add_argument("--devices", type=int, default=1)
     args.add_argument("--logger_dir", type=str, default="./exps/logs/")
@@ -853,6 +885,6 @@ if __name__ == "__main__":
     args.add_argument("--reload_dataloaders_every_n_epochs", type=int, default=1)
     args.add_argument("--every_plot_step", type=int, default=2000)
     args.add_argument("--val_check_interval", type=int, default=None)
-    args.add_argument("--lora_config_path", type=str, default=None)
+    args.add_argument("--lora_config_path", type=str, default="config/zh_rap_lora_config.json")
     args = args.parse_args()
     main(args)

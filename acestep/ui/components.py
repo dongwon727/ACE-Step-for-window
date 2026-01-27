@@ -8,6 +8,7 @@ Apache 2.0 License
 
 import gradio as gr
 import librosa
+import os
 
 
 TAG_DEFAULT = "funk, pop, soul, rock, melodic, guitar, drums, bass, keyboard, percussion, 105 BPM, energetic, upbeat, groovy, vibrant, dynamic"
@@ -48,6 +49,26 @@ Catch the tune and hold it tight
 In this moment we take flight
 """
 
+# First, let's define the presets at the top of the file, after the imports
+GENRE_PRESETS = {
+    "Modern Pop": "pop, synth, drums, guitar, 120 bpm, upbeat, catchy, vibrant, female vocals, polished vocals",
+    "Rock": "rock, electric guitar, drums, bass, 130 bpm, energetic, rebellious, gritty, male vocals, raw vocals",
+    "Hip Hop": "hip hop, 808 bass, hi-hats, synth, 90 bpm, bold, urban, intense, male vocals, rhythmic vocals",
+    "Country": "country, acoustic guitar, steel guitar, fiddle, 100 bpm, heartfelt, rustic, warm, male vocals, twangy vocals",
+    "EDM": "edm, synth, bass, kick drum, 128 bpm, euphoric, pulsating, energetic, instrumental",
+    "Reggae": "reggae, guitar, bass, drums, 80 bpm, chill, soulful, positive, male vocals, smooth vocals",
+    "Classical": "classical, orchestral, strings, piano, 60 bpm, elegant, emotive, timeless, instrumental",
+    "Jazz": "jazz, saxophone, piano, double bass, 110 bpm, smooth, improvisational, soulful, male vocals, crooning vocals",
+    "Metal": "metal, electric guitar, double kick drum, bass, 160 bpm, aggressive, intense, heavy, male vocals, screamed vocals",
+    "R&B": "r&b, synth, bass, drums, 85 bpm, sultry, groovy, romantic, female vocals, silky vocals"
+}
+
+# Add this function to handle preset selection
+def update_tags_from_preset(preset_name):
+    if preset_name == "Custom":
+        return ""
+    return GENRE_PRESETS.get(preset_name, "")
+
 
 def create_output_ui(task_name="Text2Music"):
     # For many consumer-grade GPU devices, only one batch can be run
@@ -69,7 +90,21 @@ def create_text2music_ui(
     gr,
     text2music_process_func,
     sample_data_func=None,
+    load_data_func=None,
 ):
+
+    with gr.Row(equal_height=True):
+        # Get base output directory from environment variable, defaulting to CWD-relative 'outputs'.
+        # This default (./outputs) is suitable for non-Docker local development.
+        # For Docker, the ACE_OUTPUT_DIR environment variable should be set (e.g., to /app/outputs).
+        output_file_dir = os.environ.get("ACE_OUTPUT_DIR", "./outputs")
+        if not os.path.isdir(output_file_dir):
+            os.makedirs(output_file_dir, exist_ok=True)
+        json_files = [f for f in os.listdir(output_file_dir) if f.endswith('.json')]
+        json_files.sort(reverse=True, key=lambda x: int(x.split('_')[1]))
+        output_files = gr.Dropdown(choices=json_files, label="Select previous generated input params", scale=9, interactive=True)
+        load_bnt = gr.Button("Load", variant="primary", scale=1)
+
     with gr.Row():
         with gr.Column():
             with gr.Row(equal_height=True):
@@ -84,35 +119,90 @@ def create_text2music_ui(
                     info="-1 means random duration (30 ~ 240).",
                     scale=9,
                 )
-                sample_bnt = gr.Button("Sample", variant="primary", scale=1)
+                format = gr.Dropdown(choices=["mp3", "ogg", "flac", "wav"], value="wav", label="Format")
+                sample_bnt = gr.Button("Sample", variant="secondary", scale=1)
 
-            prompt = gr.Textbox(
-                lines=2,
-                label="Tags",
-                max_lines=4,
-                value=TAG_DEFAULT,
-                info="Support tags, descriptions, and scene. Use commas to separate different tags.\ntags and lyrics examples are from ai music generation community",
+            # audio2audio
+            with gr.Row(equal_height=True):
+                audio2audio_enable = gr.Checkbox(label="Enable Audio2Audio", value=False, info="Check to enable Audio-to-Audio generation using a reference audio.", elem_id="audio2audio_checkbox")
+                lora_name_or_path = gr.Dropdown(
+                    label="Lora Name or Path",
+                    choices=["ACE-Step/ACE-Step-v1-chinese-rap-LoRA", "none"],
+                    value="none",
+                    allow_custom_value=True,
+                    min_width=300
+                )
+                lora_weight = gr.Number(value=1.0, label="Lora weight", step=0.1, maximum=3, minimum=-3)
+
+            ref_audio_input = gr.Audio(type="filepath", label="Reference Audio (for Audio2Audio)", visible=False, elem_id="ref_audio_input", show_download_button=True)
+            ref_audio_strength = gr.Slider(
+                label="Refer audio strength",
+                minimum=0.0,
+                maximum=1.0,
+                step=0.01,
+                value=0.5,
+                elem_id="ref_audio_strength",
+                visible=False,
+                interactive=True,
             )
-            lyrics = gr.Textbox(
-                lines=9,
-                label="Lyrics",
-                max_lines=13,
-                value=LYRIC_DEFAULT,
-                info="Support lyric structure tags like [verse], [chorus], and [bridge] to separate different parts of the lyrics.\nUse [instrumental] or [inst] to generate instrumental music. Not support genre structure tag in lyrics",
+
+            def toggle_ref_audio_visibility(is_checked):
+                return (
+                    gr.update(visible=is_checked, elem_id="ref_audio_input"),
+                    gr.update(visible=is_checked, elem_id="ref_audio_strength"),
+                )
+
+            audio2audio_enable.change(
+                fn=toggle_ref_audio_visibility,
+                inputs=[audio2audio_enable],
+                outputs=[ref_audio_input, ref_audio_strength],
             )
+
+            with gr.Column(scale=2):
+                with gr.Group():
+                    gr.Markdown("""<center>Support tags, descriptions, and scene. Use commas to separate different tags.<br>Tags and lyrics examples are from AI music generation community.</center>""")
+                    with gr.Row():
+                        genre_preset = gr.Dropdown(
+                            choices=["Custom"] + list(GENRE_PRESETS.keys()),
+                            value="Custom",
+                            label="Preset",
+                            scale=1,
+                        )
+                        prompt = gr.Textbox(
+                            lines=1,
+                            label="Tags",
+                            max_lines=4,
+                            value=TAG_DEFAULT,
+                            scale=9,
+                        )
+
+            # Add the change event for the preset dropdown
+            genre_preset.change(
+                fn=update_tags_from_preset,
+                inputs=[genre_preset],
+                outputs=[prompt]
+            )
+            with gr.Group():
+                gr.Markdown("""<center>Support lyric structure tags like [verse], [chorus], and [bridge] to separate different parts of the lyrics.<br>Use [instrumental] or [inst] to generate instrumental music. Not support genre structure tag in lyrics</center>""")
+                lyrics = gr.Textbox(
+                    lines=9,
+                    label="Lyrics",
+                    max_lines=13,
+                    value=LYRIC_DEFAULT,
+                )
 
             with gr.Accordion("Basic Settings", open=False):
                 infer_step = gr.Slider(
                     minimum=1,
-                    maximum=1000,
+                    maximum=200,
                     step=1,
-                    value=27,
+                    value=60,
                     label="Infer Steps",
                     interactive=True,
                 )
                 guidance_scale = gr.Slider(
                     minimum=0.0,
-                    maximum=200.0,
+                    maximum=30.0,
                     step=0.1,
                     value=15.0,
                     label="Guidance Scale",
@@ -146,11 +236,11 @@ def create_text2music_ui(
 
             with gr.Accordion("Advanced Settings", open=False):
                 scheduler_type = gr.Radio(
-                    ["euler", "heun"],
+                    ["euler", "heun", "pingpong"],
                     value="euler",
                     label="Scheduler Type",
                     elem_id="scheduler_type",
-                    info="Scheduler type for the generation. euler is recommended. heun will take more time.",
+                    info="Scheduler type for the generation. euler is recommended. heun will take more time. pingpong use SDE",
                 )
                 cfg_type = gr.Radio(
                     ["cfg", "apg", "cfg_star"],
@@ -166,7 +256,7 @@ def create_text2music_ui(
                 )
                 use_erg_lyric = gr.Checkbox(
                     label="use ERG for lyric",
-                    value=True,
+                    value=False,
                     info="The same but apply to lyric encoder's attention.",
                 )
                 use_erg_diffusion = gr.Checkbox(
@@ -235,6 +325,7 @@ def create_text2music_ui(
 
                 def retake_process_func(json_data, retake_variance, retake_seeds):
                     return text2music_process_func(
+                        json_data["format"],
                         json_data["audio_duration"],
                         json_data["prompt"],
                         json_data["lyrics"],
@@ -264,6 +355,8 @@ def create_text2music_ui(
                         retake_seeds=retake_seeds,
                         retake_variance=retake_variance,
                         task="retake",
+                        lora_name_or_path="none" if "lora_name_or_path" not in json_data else json_data["lora_name_or_path"],
+                        lora_weight=1 if "lora_weight" not in json_data else json_data["lora_weight"]
                     )
 
                 retake_bnt.click(
@@ -310,6 +403,7 @@ def create_text2music_ui(
                     type="filepath",
                     visible=False,
                     elem_id="repaint_source_audio_upload",
+                    show_download_button=True,
                 )
                 repaint_source.change(
                     fn=lambda x: gr.update(
@@ -361,6 +455,7 @@ def create_text2music_ui(
                         src_audio_path = json_data["audio_path"]
 
                     return text2music_process_func(
+                        format.value,
                         json_data["audio_duration"],
                         prompt,
                         lyrics,
@@ -385,6 +480,8 @@ def create_text2music_ui(
                         repaint_start=repaint_start,
                         repaint_end=repaint_end,
                         src_audio_path=src_audio_path,
+                        lora_name_or_path="none" if "lora_name_or_path" not in json_data else json_data["lora_name_or_path"],
+                        lora_weight=1 if "lora_weight" not in json_data else json_data["lora_weight"]
                     )
 
                 repaint_bnt.click(
@@ -475,6 +572,7 @@ def create_text2music_ui(
                     type="filepath",
                     visible=False,
                     elem_id="edit_source_audio_upload",
+                    show_download_button=True,
                 )
                 edit_source.change(
                     fn=lambda x: gr.update(
@@ -532,6 +630,7 @@ def create_text2music_ui(
                         edit_lyrics = lyrics
 
                     return text2music_process_func(
+                        format.value,
                         json_data["audio_duration"],
                         prompt,
                         lyrics,
@@ -557,6 +656,8 @@ def create_text2music_ui(
                         edit_n_min=edit_n_min,
                         edit_n_max=edit_n_max,
                         retake_seeds=retake_seeds,
+                        lora_name_or_path="none" if "lora_name_or_path" not in json_data else json_data["lora_name_or_path"],
+                        lora_weight=1 if "lora_weight" not in json_data else json_data["lora_weight"]
                     )
 
                 edit_bnt.click(
@@ -623,6 +724,7 @@ def create_text2music_ui(
                     type="filepath",
                     visible=False,
                     elem_id="extend_source_audio_upload",
+                    show_download_button=True,
                 )
                 extend_source.change(
                     fn=lambda x: gr.update(
@@ -676,6 +778,7 @@ def create_text2music_ui(
                     repaint_start = -left_extend_length
                     repaint_end = json_data["audio_duration"] + right_extend_length
                     return text2music_process_func(
+                        format.value,
                         json_data["audio_duration"],
                         prompt,
                         lyrics,
@@ -700,6 +803,16 @@ def create_text2music_ui(
                         repaint_start=repaint_start,
                         repaint_end=repaint_end,
                         src_audio_path=src_audio_path,
+                        lora_name_or_path=(
+                            "none"
+                            if "lora_name_or_path" not in json_data
+                            else json_data["lora_name_or_path"]
+                        ),
+                        lora_weight=(
+                            1
+                            if "lora_weight" not in json_data
+                            else json_data["lora_weight"]
+                        ),
                     )
 
                 extend_bnt.click(
@@ -733,8 +846,7 @@ def create_text2music_ui(
                     outputs=extend_outputs + [extend_input_params_json],
                 )
 
-        def sample_data():
-            json_data = sample_data_func()
+        def json2output(json_data):
             return (
                 json_data["audio_duration"],
                 json_data["prompt"],
@@ -762,10 +874,30 @@ def create_text2music_ui(
                     if "guidance_scale_lyric" in json_data
                     else 0.0
                 ),
+                (
+                    json_data["audio2audio_enable"]
+                    if "audio2audio_enable" in json_data
+                    else False
+                ),
+                (
+                    json_data["ref_audio_strength"]
+                    if "ref_audio_strength" in json_data
+                    else 0.5
+                ),
+                (
+                    json_data["ref_audio_input"]
+                    if "ref_audio_input" in json_data
+                    else None
+                ),
             )
+
+        def sample_data(lora_name_or_path_):
+            json_data = sample_data_func(lora_name_or_path_)
+            return json2output(json_data)
 
         sample_bnt.click(
             sample_data,
+            inputs=[lora_name_or_path],
             outputs=[
                 audio_duration,
                 prompt,
@@ -785,12 +917,50 @@ def create_text2music_ui(
                 oss_steps,
                 guidance_scale_text,
                 guidance_scale_lyric,
+                audio2audio_enable,
+                ref_audio_strength,
+                ref_audio_input,
+            ],
+        )
+
+        def load_data(json_file):
+            if isinstance(output_file_dir, str):
+                json_file = os.path.join(output_file_dir, json_file)
+            json_data = load_data_func(json_file)
+            return json2output(json_data)
+
+        load_bnt.click(
+            fn=load_data,
+            inputs=[output_files],
+            outputs=[
+                audio_duration,
+                prompt,
+                lyrics,
+                infer_step,
+                guidance_scale,
+                scheduler_type,
+                cfg_type,
+                omega_scale,
+                manual_seeds,
+                guidance_interval,
+                guidance_interval_decay,
+                min_guidance_scale,
+                use_erg_tag,
+                use_erg_lyric,
+                use_erg_diffusion,
+                oss_steps,
+                guidance_scale_text,
+                guidance_scale_lyric,
+                audio2audio_enable,
+                ref_audio_strength,
+                ref_audio_input,
             ],
         )
 
     text2music_bnt.click(
         fn=text2music_process_func,
         inputs=[
+            format,
             audio_duration,
             prompt,
             lyrics,
@@ -809,6 +979,11 @@ def create_text2music_ui(
             oss_steps,
             guidance_scale_text,
             guidance_scale_lyric,
+            audio2audio_enable,
+            ref_audio_strength,
+            ref_audio_input,
+            lora_name_or_path,
+            lora_weight
         ],
         outputs=outputs + [input_params_json],
     )
@@ -817,6 +992,7 @@ def create_text2music_ui(
 def create_main_demo_ui(
     text2music_process_func=dump_func,
     sample_data_func=dump_func,
+    load_data_func=dump_func,
 ):
     with gr.Blocks(
         title="ACE-Step Model 1.0 DEMO",
@@ -826,12 +1002,12 @@ def create_main_demo_ui(
             <h1 style="text-align: center;">ACE-Step: A Step Towards Music Generation Foundation Model</h1>
         """
         )
-
         with gr.Tab("text2music"):
             create_text2music_ui(
                 gr=gr,
                 text2music_process_func=text2music_process_func,
                 sample_data_func=sample_data_func,
+                load_data_func=load_data_func,
             )
     return demo
 

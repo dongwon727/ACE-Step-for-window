@@ -9,8 +9,8 @@ import traceback
 import torchaudio
 from pathlib import Path
 import re
-from language_segmentation import LangSegment
-from models.lyrics_utils.lyric_tokenizer import VoiceBpeTokenizer
+from acestep.language_segmentation import LangSegment
+from acestep.models.lyrics_utils.lyric_tokenizer import VoiceBpeTokenizer
 import warnings
 
 warnings.simplefilter("ignore", category=FutureWarning)
@@ -456,7 +456,8 @@ class Text2MusicDataset(Dataset):
         speaker_emb_path = item.get("speaker_emb_path")
         if not speaker_emb_path:
             speaker_emb = self.get_speaker_emb_file(speaker_emb_path)
-        else:
+
+        if speaker_emb is None:
             speaker_emb = torch.zeros(512)
 
         # Process prompt/tags
