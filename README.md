@@ -197,7 +197,7 @@ cd ACE-Step
 Ensure you have the following installed:
 
 * `Python`: Version 3.10 or later is recommended. You can download it from [python.org](https://www.python.org/).
-* `Conda` or `venv`: For creating a virtual environment (Conda is recommended).
+* `venv`: For creating a virtual environment.
 
 ### 3. Use One-Click install Script
 
