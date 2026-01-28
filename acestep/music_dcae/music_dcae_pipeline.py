@@ -10,6 +10,8 @@ import os
 import torch
 from diffusers import AutoencoderDC
 import torchaudio
+#import librosa
+import soundfile as sf
 import torchvision.transforms as transforms
 from diffusers.models.modeling_utils import ModelMixin
 from diffusers.loaders import FromOriginalModelMixin
@@ -60,7 +62,12 @@ class MusicDCAE(ModelMixin, ConfigMixin, FromOriginalModelMixin):
         self.shift_factor = -1.9091
 
     def load_audio(self, audio_path):
-        audio, sr = torchaudio.load(audio_path)
+        audio_data, sr = sf.read(audio_path)
+        audio = torch.from_numpy(audio_data).float()
+        if audio.ndim == 1:
+            audio = audio.unsqueeze(0)
+        else:
+            audio = audio.transpose(0, 1)
         if audio.shape[0] == 1:
             audio = audio.repeat(2, 1)
         return audio, sr
@@ -361,8 +368,12 @@ class MusicDCAE(ModelMixin, ConfigMixin, FromOriginalModelMixin):
 
 
 if __name__ == "__main__":
-
-    audio, sr = torchaudio.load("test.wav")
+    audio, sr = sf.read("test.wav")
+    audio = torch.from_numpy(audio_data).float()
+    if audio.ndim == 1:
+        audio = audio.unsqueeze(0)
+    else:
+        audio = audio.transpose(0, 1)
     audio_lengths = torch.tensor([audio.shape[1]])
     audios = audio.unsqueeze(0)
 
@@ -378,5 +389,11 @@ if __name__ == "__main__":
     print("latents shape: ", latents.shape)
     print("latent_lengths: ", latent_lengths)
     print("sr: ", sr)
-    torchaudio.save("test_reconstructed.wav", pred_wavs[0], sr)
+    output_wav = pred_wavs[0]
+    output_wav_np = output_wav.cpu().numpy()
+    # (channels, samples) -> (samples, channels)로 축 변경 (오디오가 스테레오/멀티채널일 경우)
+    if output_wav_np.ndim > 1 and output_wav_np.shape[0] < output_wav_np.shape[1]:
+        # 채널 수가 샘플 수보다 적다면 (채널 우선) -> (샘플 우선)으로 변환
+        output_wav_np = output_wav_np.T 
+    sf.write("test_reconstructed.wav", output_wav_np, sr)
     print("test_reconstructed.wav")

@@ -1055,12 +1055,25 @@ class ACEStepPipeline:
                 if right_pad_frame_length > 0:
                     padd_list.append(retake_latents[:, :, :, -right_pad_frame_length:])
                 target_latents = torch.cat(padd_list, dim=-1)
+                #-------- edited by iackov --------
+                # Fix shape mismatch between target_latents and x0
+                if target_latents.shape[-1] != x0.shape[-1]:
+                    if target_latents.shape[-1] < x0.shape[-1]:
+                        # Pad with zeros if target_latents is shorter
+                        padding = x0.shape[-1] - target_latents.shape[-1]
+                        target_latents = torch.nn.functional.pad(
+                            target_latents, (0, padding), "constant", 0
+                        )
+                    else:
+                        # Trim if target_latents is longer
+                        target_latents = target_latents[..., :x0.shape[-1]]
+                #---------------------------------
                 assert (
                     target_latents.shape[-1] == x0.shape[-1]
                 ), f"{target_latents.shape=} {x0.shape=}"
                 zt_edit = x0.clone()
                 z0 = target_latents
-
+                
         if audio2audio_enable and ref_latents is not None:
             logger.info(
                 f"audio2audio_enable: {audio2audio_enable}, ref_latents: {ref_latents.shape}"
@@ -1383,10 +1396,9 @@ class ACEStepPipeline:
             output_audio_paths.append(output_audio_path)
         return output_audio_paths
 
-    def save_wav_file(self, wav, sr, save_path=None, format="wav"):
-        """
-        [수정] torchcodec 오류를 완전히 피하기 위해 soundfile 라이브러리를 직접 사용하여 저장합니다.
-        """
+    def save_wav_file(
+        self, target_wav, idx, save_path=None, sample_rate=48000, format="wav"
+    ):
         if save_path is None:
             save_path = "./outputs/"
 
@@ -1403,37 +1415,23 @@ class ACEStepPipeline:
         full_path = os.path.join(save_path, f"{filename}_{idx}.{format}")
 
         # 텐서 전처리 (CPU 이동 및 numpy 변환)
-        if isinstance(wav, torch.Tensor):
-            wav = wav.detach().cpu()
-            if wav.ndim == 3: # (B, C, T) -> (C, T)
-                wav = wav.squeeze(0)
-            if wav.ndim == 1: # (T) -> (1, T)
-                wav = wav.unsqueeze(0)
+        if isinstance(target_wav, torch.Tensor):
+            target_wav = target_wav.detach().cpu()
+            if target_wav.ndim == 3: # (B, C, T) -> (C, T)
+                target_wav = target_wav.squeeze(0)
+            if target_wav.ndim == 1: # (T) -> (1, T)
+                target_wav = target_wav.unsqueeze(0)
             
             # soundfile은 (Sample, Channel) 형식을 기대하므로 전치(Transpose)
-            audio_data = wav.numpy().T 
+            audio_data = target_wav.numpy().T 
         else:
-            audio_data = wav
+            audio_data = target_wav
 
         # 1순위: soundfile 라이브러리로 직접 쓰기 (torchcodec 우회)
-        try:
-            import soundfile as sf
-            logger.info(f"Saving audio to {full_path} using soundfile library (direct)")
-            sf.write(full_path, audio_data, sr)
-            return full_path
-        except Exception as e:
-            logger.warning(f"Direct soundfile write failed: {e}. Trying torchaudio fallback...")
-
-        # 2순위: torchaudio.save 시도 (혹시 위가 실패할 경우)
-        try:
-            import torchaudio
-            # 다시 한번 (C, T) 형태로 복구
-            wav_tensor = torch.from_numpy(audio_data.T)
-            torchaudio.save(full_path, wav_tensor, sr, format=format, backend="soundfile")
-            return full_path
-        except Exception as e:
-            logger.error(f"All audio save methods failed: {e}")
-            raise e
+        import soundfile as sf
+        logger.info(f"Saving audio to {full_path} using soundfile library (direct)")
+        sf.write(full_path, audio_data, sample_rate)
+        return full_path
 
     @cpu_offload("music_dcae")
     def infer_latents(self, input_audio_path):
