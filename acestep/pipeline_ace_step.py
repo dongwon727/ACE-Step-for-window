@@ -18,6 +18,15 @@ import json
 import math
 from huggingface_hub import snapshot_download
 
+try:
+    import torchaudio
+    import soundfile as sf
+    # 윈도우에서 torchcodec 간섭을 피하기 위해 soundfile을 기본 백엔드로 설정
+    if "soundfile" in torchaudio.list_audio_backends():
+        torchaudio.set_audio_backend("soundfile")
+except Exception as e:
+    logger.warning(f"Audio backend setup warning: {e}")
+
 # from diffusers.pipelines.pipeline_utils import DiffusionPipeline
 from acestep.schedulers.scheduling_flow_match_euler_discrete import (
     FlowMatchEulerDiscreteScheduler,
@@ -1374,33 +1383,57 @@ class ACEStepPipeline:
             output_audio_paths.append(output_audio_path)
         return output_audio_paths
 
-    def save_wav_file(
-        self, target_wav, idx, save_path=None, sample_rate=48000, format="wav"
-    ):
+    def save_wav_file(self, wav, sr, save_path=None, format="wav"):
+        """
+        [수정] torchcodec 오류를 완전히 피하기 위해 soundfile 라이브러리를 직접 사용하여 저장합니다.
+        """
         if save_path is None:
-            logger.warning("save_path is None, using default path ./outputs/")
-            base_path = "./outputs"
-            ensure_directory_exists(base_path)
-            output_path_wav = (
-                f"{base_path}/output_{time.strftime('%Y%m%d%H%M%S')}_{idx}."+format
-            )
-        else:
-            ensure_directory_exists(os.path.dirname(save_path))
-            if os.path.isdir(save_path):
-                logger.info(f"Provided save_path '{save_path}' is a directory. Appending timestamped filename.")
-                output_path_wav = os.path.join(save_path, f"output_{time.strftime('%Y%m%d%H%M%S')}_{idx}."+format)
-            else:
-                output_path_wav = save_path
+            save_path = "./outputs/"
 
-        target_wav = target_wav.float()
-        backend = "soundfile"
-        if format == "ogg":
-            backend = "sox"
-        logger.info(f"Saving audio to {output_path_wav} using backend {backend}")
-        torchaudio.save(
-            output_path_wav, target_wav, sample_rate=sample_rate, format=format, backend=backend
-        )
-        return output_path_wav
+        if not os.path.exists(save_path):
+            os.makedirs(save_path)
+
+        timestamp = time.strftime("%Y%m%d%H%M%S", time.localtime())
+        filename = f"output_{timestamp}"
+        
+        idx = 0
+        while os.path.exists(os.path.join(save_path, f"{filename}_{idx}.{format}")):
+            idx += 1
+            
+        full_path = os.path.join(save_path, f"{filename}_{idx}.{format}")
+
+        # 텐서 전처리 (CPU 이동 및 numpy 변환)
+        if isinstance(wav, torch.Tensor):
+            wav = wav.detach().cpu()
+            if wav.ndim == 3: # (B, C, T) -> (C, T)
+                wav = wav.squeeze(0)
+            if wav.ndim == 1: # (T) -> (1, T)
+                wav = wav.unsqueeze(0)
+            
+            # soundfile은 (Sample, Channel) 형식을 기대하므로 전치(Transpose)
+            audio_data = wav.numpy().T 
+        else:
+            audio_data = wav
+
+        # 1순위: soundfile 라이브러리로 직접 쓰기 (torchcodec 우회)
+        try:
+            import soundfile as sf
+            logger.info(f"Saving audio to {full_path} using soundfile library (direct)")
+            sf.write(full_path, audio_data, sr)
+            return full_path
+        except Exception as e:
+            logger.warning(f"Direct soundfile write failed: {e}. Trying torchaudio fallback...")
+
+        # 2순위: torchaudio.save 시도 (혹시 위가 실패할 경우)
+        try:
+            import torchaudio
+            # 다시 한번 (C, T) 형태로 복구
+            wav_tensor = torch.from_numpy(audio_data.T)
+            torchaudio.save(full_path, wav_tensor, sr, format=format, backend="soundfile")
+            return full_path
+        except Exception as e:
+            logger.error(f"All audio save methods failed: {e}")
+            raise e
 
     @cpu_offload("music_dcae")
     def infer_latents(self, input_audio_path):
