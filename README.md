@@ -188,7 +188,7 @@ We use RTF (Real-Time Factor) to measure the performance of ACE-Step. Higher val
 
 ### 1. Clone the Repository
 First, clone the ACE-Step repository to your local machine and navigate into the project directory:
-```bash
+```powershell
 git clone https://github.com/ace-step/ACE-Step.git
 cd ACE-Step
 ```
@@ -203,9 +203,9 @@ Ensure you have the following installed:
 
 It is highly recommended to use a One-Click install Script that will automaticly set up this application. 
 
-    ```PowerShell
-    ./install.ps1
-    ```
+```powershell
+./install.ps1
+```
 
 The ACE-Step application is now installed. The GUI works on Windows, macOS, and Linux. For instructions on how to run it, please see the [Usage](#-usage) section.
 
