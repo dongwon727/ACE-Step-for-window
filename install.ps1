@@ -106,6 +106,8 @@ Write-Output "Installing main requirements"
 uv pip install --upgrade setuptools wheel
 
 uv pip install -e .
+
+pip install triton-windows
 Check "Install main requirements failed"
 
 Write-Output "Install finished"
