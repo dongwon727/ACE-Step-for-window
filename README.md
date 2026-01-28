@@ -178,6 +178,7 @@ We have evaluated ACE-Step across different hardware setups, yielding the follow
 | NVIDIA A100     | 27.27 ×        | 2.20 s                                | 12.27 ×        | 4.89 s                                |
 | NVIDIA RTX 3090 | 12.76 ×        | 4.70 s                                | 6.48 ×         | 9.26 s                                |
 | MacBook M2 Max  | 2.27 ×         | 26.43 s                               | 1.03 ×         | 58.25 s                               |
+| NVIDIA V100     |                |                                       |                |                                       |
 
 
 We use RTF (Real-Time Factor) to measure the performance of ACE-Step. Higher values indicate faster generation speed. 27.27x means to generate 1 minute of music, it takes 2.2 seconds (60/27.27). The performance is measured on a single GPU with batch size 1 and 27 steps.
@@ -198,59 +199,13 @@ Ensure you have the following installed:
 * `Python`: Version 3.10 or later is recommended. You can download it from [python.org](https://www.python.org/).
 * `Conda` or `venv`: For creating a virtual environment (Conda is recommended).
 
-### 3. Set Up a Virtual Environment
+### 3. Use One-Click install Script
 
-It is highly recommended to use a virtual environment to manage project dependencies and avoid conflicts. Choose one of the following methods:
+It is highly recommended to use a One-Click install Script that will automaticly set up this application. 
 
-#### Option A: Using Conda
-
-1.  **Create the environment** named `ace_step` with Python 3.10:
-    ```bash
-    conda create -n ace_step python=3.10 -y
+    ```PowerShell
+    ./install.ps1
     ```
-
-2.  **Activate the environment:**
-    ```bash
-    conda activate ace_step
-    ```
-
-#### Option B: Using venv
-
-1.  **Navigate to the cloned ACE-Step directory.**
-
-2.  **Create the virtual environment** (commonly named `venv`):
-    ```bash
-    python -m venv venv 
-    ```
-
-3.  **Activate the environment:**
-    * **On Windows (cmd.exe):**
-        ```bash
-        venv\Scripts\activate.bat
-        ```
-    * **On Windows (PowerShell):**
-        ```powershell
-        .\venv\Scripts\Activate.ps1 
-        ```
-        *(If you encounter execution policy errors, you might need to run `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process` first)*
-    * **On Linux / macOS (bash/zsh):**
-        ```bash
-        source venv/bin/activate
-        ```
-
-### 4. Install Dependencies
-Once your virtual environment is activated:
-**a.** (Windows Only) If you are on Windows and plan to use an NVIDIA GPU, install PyTorch with CUDA support first:
-
-```bash
-pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
-```
-(Adjust cu126 if you have a different CUDA version. For other PyTorch installation options, refer to the [official PyTorch website](https://pytorch.org/get-started/locally/)).
-
-**b.** Install ACE-Step and its core dependencies:
-```bash
-pip install -e .
-```
 
 The ACE-Step application is now installed. The GUI works on Windows, macOS, and Linux. For instructions on how to run it, please see the [Usage](#-usage) section.
 
@@ -261,8 +216,8 @@ The ACE-Step application is now installed. The GUI works on Windows, macOS, and 
 
 ### 🔍 Basic Usage
 
-```bash
-acestep --port 7865
+```PowerShell
+./run_gui.ps1 --port 7865
 ```
 
 ### ⚙️ Advanced Usage
