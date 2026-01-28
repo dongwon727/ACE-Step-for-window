@@ -190,7 +190,7 @@ We use RTF (Real-Time Factor) to measure the performance of ACE-Step. Higher val
 First, clone the ACE-Step repository to your local machine and navigate into the project directory:
 ```PowerShell
 git clone https://github.com/dongwon727/ACE-Step-for-window.git
-cd ACE-Step
+cd ACE-Step-for-window
 ```
 
 ### 2. Prerequisites

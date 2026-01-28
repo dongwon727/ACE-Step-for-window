@@ -252,6 +252,7 @@ pandas==2.2.3
     # via
     #   datasets
     #   gradio
+peft
 pillow==11.2.1
     # via
     #   diffusers
@@ -384,6 +385,8 @@ starlette==0.46.2
     #   gradio
 sympy==1.14.0
     # via torch
+tensorboard
+tensorboardX
 thinc==8.3.6
     # via spacy
 threadpoolctl==3.6.0
