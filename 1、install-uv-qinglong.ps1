@@ -105,7 +105,7 @@ Write-Output "Installing main requirements"
 
 uv pip install --upgrade setuptools wheel
 
-uv pip sync requirements-uv.txt --index-strategy unsafe-best-match
+uv pip install -e .
 Check "Install main requirements failed"
 
 Write-Output "Install finished"
