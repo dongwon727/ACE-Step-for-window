@@ -3,13 +3,13 @@
 param (
     [int]$port = 7865,
     [int]$device_id = 0,
-	[bool]$share = false,
-	[bool]$bf16 = false,
-	[bool]$torch_compile = true,
-	[bool]$cpu_offload = true,
+	[bool]$share = $False,
+	[bool]$bf16 = $False,
+	[bool]$torch_compile = $True,
+	[bool]$cpu_offload = $True,
 	[string]$checkpoint_path = "",
 	[string]$server_name = "127.0.0.1",
-	[bool]$overlapped_decode = false
+	[bool]$overlapped_decode = $False
 )
 
 # Activate python venv
