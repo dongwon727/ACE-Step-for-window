@@ -107,8 +107,10 @@ uv pip install --upgrade setuptools wheel
 
 uv pip install -e .
 
-pip install triton-windows
+uv pip install triton-windows
 Check "Install main requirements failed"
 
-Write-Output "Install finished"
+deactivate
+
+Write-Output "Install finished (use Ctrl + C to exit)"
 Read-Host | Out-Null ;
