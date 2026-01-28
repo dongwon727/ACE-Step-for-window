@@ -105,9 +105,11 @@ Write-Output "Installing main requirements"
 
 uv pip install --upgrade setuptools wheel
 
+uv pip install torch==2.10.0 torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
+
 uv pip install -e .
 
-uv pip install triton-windows
+uv pip install triton-windows==3.6.0.post25
 Check "Install main requirements failed"
 
 deactivate

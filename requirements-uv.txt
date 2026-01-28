@@ -395,20 +395,8 @@ tokenizers==0.21.1
     # via transformers
 tomlkit==0.13.2
     # via gradio
-torch==2.7.0
-    # via
-    #   -r requirements.txt
-    #   accelerate
-    #   pytorch-lightning
-    #   torchaudio
-    #   torchmetrics
-    #   torchvision
-torchaudio==2.7.0
-    # via -r requirements.txt
 torchmetrics==1.7.1
     # via pytorch-lightning
-torchvision==0.22.0
-    # via -r requirements.txt
 tqdm==4.67.1
     # via
     #   -r requirements.txt
