@@ -188,7 +188,7 @@ We use RTF (Real-Time Factor) to measure the performance of ACE-Step. Higher val
 
 ### 1. Clone the Repository
 First, clone the ACE-Step repository to your local machine and navigate into the project directory:
-```powershell
+```PowerShell
 git clone https://github.com/ace-step/ACE-Step.git
 cd ACE-Step
 ```
@@ -203,7 +203,7 @@ Ensure you have the following installed:
 
 It is highly recommended to use a One-Click install Script that will automaticly set up this application. 
 
-```powershell
+```PowerShell
 ./install.ps1
 ```
 
@@ -222,8 +222,8 @@ The ACE-Step application is now installed. The GUI works on Windows, macOS, and 
 
 ### ⚙️ Advanced Usage
 
-```bash
-acestep --checkpoint_path /path/to/checkpoint --port 7865 --device_id 0 --share true --bf16 true
+```PowerShell
+./run_gui.ps1 --checkpoint_path /path/to/checkpoint --port 7865 --device_id 0 --share true --bf16 true
 ```
 
 * If `--checkpoint_path` is set and models exist at the path, load from `checkpoint_path`.
@@ -235,15 +235,6 @@ If you are using macOS, please use `--bf16 false` to avoid errors.
 #### 🔍 API Usage
 If you intend to integrate ACE-Step as a library into your own Python projects, you can install the latest version directly from GitHub using the following pip command.
 
-**Direct Installation via pip:**
-
-1.  **Ensure Git is installed:** This method requires Git to be installed on your system and accessible in your system's PATH.
-2.  **Execute the installation command:**
-    ```bash
-    pip install git+https://github.com/ace-step/ACE-Step.git
-    ```
-    It's recommended to use this command within a virtual environment to avoid conflicts with other packages.
-
 #### 🛠️ Command Line Arguments
 
 - `--checkpoint_path`: Path to the model checkpoint (default: downloads automatically)
@@ -254,7 +245,7 @@ If you intend to integrate ACE-Step as a library into your own Python projects, 
 - `--bf16`: Use bfloat16 precision for faster inference (default: True)
 - `--torch_compile`: Use `torch.compile()` to optimize the model, speeding up inference (default: False). 
   - **Windows need to install triton**:
-    ```
+    ```PowerShell
     pip install triton-windows
     ```
 - `--cpu_offload`: Offload model weights to CPU to save GPU memory (default: False)
